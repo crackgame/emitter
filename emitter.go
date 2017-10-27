@@ -2,13 +2,14 @@ package emitter
 
 import (
 	"fmt"
+	"reflect"
 )
 
 type EmitFunc func(args ...interface{})
 
 type SeqFunc struct {
 	seq      int
-	callback EmitFunc
+	listener reflect.Value
 }
 
 type SeqFuncMap map[int]*SeqFunc
@@ -71,16 +72,27 @@ func (e *Emitter) Emit(event interface{}, args ...interface{}) {
 			continue
 		}
 
+		fn := seqFn.listener
+
+		var values []reflect.Value
+		for i := 0; i < len(args); i++ {
+			if args[i] == nil {
+				values = append(values, reflect.New(fn.Type().In(i)).Elem())
+			} else {
+				values = append(values, reflect.ValueOf(args[i]))
+			}
+		}
+
 		// call callback func
-		seqFn.callback(args...)
+		fn.Call(values)
 	}
 }
 
-func (e *Emitter) On(event interface{}, callback EmitFunc) *EmitOnResult {
+func (e *Emitter) On(event interface{}, listener interface{}) *EmitOnResult {
 	e.seq++
 	seqFunc := &SeqFunc{
 		seq:      e.seq,
-		callback: callback,
+		listener: reflect.ValueOf(listener),
 	}
 
 	if e.funcs[event] == nil {
